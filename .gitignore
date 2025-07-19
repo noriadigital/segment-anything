@@ -40,3 +40,6 @@ _darcs
 **/node_modules
 yarn.lock
 package-lock.json
+notebooks/images
+cuda-repo-wsl-ubuntu-12-9-local_12.9.1-1_amd64.deb
+sam_vit_h_4b8939.pth:Zone.Identifier

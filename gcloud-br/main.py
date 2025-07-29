@@ -149,14 +149,14 @@ def remove_background_to_white_handler(request: Request):
     #Download image
     download_blob(
         bucket_name="modify-assets",
-        source_blob_name="modify-assets/input_garments",
-        destination_file_name="/tmp/prueba_sweater.jpg"
+        source_blob_name="modify-assets/input_garments/prueba.jpg",
+        destination_file_name="/tmp/prueba.jpg"
     )
-    image_b64 = data.get("image_base64", "/tmp/prueba_sweater.jpg")
+    image_b64 = data.get("image_base64", "/tmp/prueba.jpg")
     #Download sam checkpoint
     download_blob(
         bucket_name="modify-assets",
-        source_blob_name="modify-assets/sam_checkpoints",
+        source_blob_name="modify-assets/sam_checkpoints/sam_checkpoint.pth",
         destination_file_name="/tmp/sam_checkpoint.pth"
     )
     sam_checkpoint = "/tmp/sam_checkpoint.pth"

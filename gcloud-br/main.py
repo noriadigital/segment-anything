@@ -5,14 +5,69 @@ import torch
 import clip
 import sys
 import os
+from google.cloud import storage
 import functions_framework
 from flask import Request, jsonify
 from segment_anything import sam_model_registry, SamAutomaticMaskGenerator, SamPredictor
 from PIL import Image
 
-# Agregamos el directorio padre al path (donde está `segment_anything`)
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+def download_blob(bucket_name, source_blob_name, destination_file_name):
+    """Downloads a blob from the bucket."""
+    # The ID of your GCS bucket
+    # bucket_name = "your-bucket-name"
 
+    # The ID of your GCS object
+    # source_blob_name = "storage-object-name"
+
+    # The path to which the file should be downloaded
+    # destination_file_name = "local/path/to/file"
+
+    storage_client = storage.Client()
+
+    bucket = storage_client.bucket(bucket_name)
+
+    # Construct a client side representation of a blob.
+    # Note `Bucket.blob` differs from `Bucket.get_blob` as it doesn't retrieve
+    # any content from Google Cloud Storage. As we don't need additional data,
+    # using `Bucket.blob` is preferred here.
+    blob = bucket.blob(source_blob_name)
+    blob.download_to_filename(destination_file_name)
+
+    print(
+        "Downloaded storage object {} from bucket {} to local file {}.".format(
+            source_blob_name, bucket_name, destination_file_name
+        )
+    )
+
+from google.cloud import storage
+
+
+def upload_blob(bucket_name, source_file_name, destination_blob_name):
+    """Uploads a file to the bucket."""
+    # The ID of your GCS bucket
+    # bucket_name = "your-bucket-name"
+    # The path to your file to upload
+    # source_file_name = "local/path/to/file"
+    # The ID of your GCS object
+    # destination_blob_name = "storage-object-name"
+
+    storage_client = storage.Client()
+    bucket = storage_client.bucket(bucket_name)
+    blob = bucket.blob(destination_blob_name)
+
+    # Optional: set a generation-match precondition to avoid potential race conditions
+    # and data corruptions. The request to upload is aborted if the object's
+    # generation number does not match your precondition. For a destination
+    # object that does not yet exist, set the if_generation_match precondition to 0.
+    # If the destination object already exists in your bucket, set instead a
+    # generation-match precondition using its generation number.
+    generation_match_precondition = 0
+
+    blob.upload_from_filename(source_file_name, if_generation_match=generation_match_precondition)
+
+    print(
+        f"File {source_file_name} uploaded to {destination_blob_name}."
+    )
 
 
 def choose_mask_clip(text_prompt, input_image, input_masks, output_path='', return_image=False):
@@ -93,7 +148,11 @@ def remove_background_to_white_handler(request: Request):
     data = request.get_json()
     image_b64 = data.get("image_base64")
     garment = data.get("garment")
-    sam_checkpoint = data.get("sam_checkpoint", "sam_vit_h_4b8939.pth")
+    sam_checkpoint = download_blob(
+        bucket_name="modify-assets",
+        source_blob_name="modify-assets/sam_checkpoints/sam_vit_h_4b8939.pth",
+        destination_file_name="sam_checkpoint.pth"
+    )
     model_type = data.get("model_type", "vit_h")
     points_per_side = int(data.get("points_per_side", 16))
     pred_iou_thresh = float(data.get("pred_iou_thresh", 0.88))
@@ -134,4 +193,16 @@ def remove_background_to_white_handler(request: Request):
     _, buf = cv2.imencode(".jpg", result)
     res_b64 = base64.b64encode(buf).decode("utf-8")
     print("Imagen Procesada!")
+
+    # 6. Subir imagen procesada a GCS
+    output_bucket_name = "modify-assets"
+    output_path = "modify-assets/output_garments"
+    output_file_name = "output_prueba.jpg"
+
+    upload_blob(
+        bucket_name=output_bucket_name,
+        source_file_name=output_path,
+        destination_blob_name = output_file_name
+    )
+
     return jsonify({"image_processed_base64": res_b64})

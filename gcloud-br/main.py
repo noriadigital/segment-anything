@@ -147,7 +147,6 @@ def choose_mask_clip(text_prompt, input_image, input_masks, output_path='', retu
 def remove_background_to_white_handler(request: Request):
     data = request.get_json()
     image_b64 = data.get("image_base64")
-    garment = data.get("garment")
     sam_checkpoint = download_blob(
         bucket_name="modify-assets",
         source_blob_name="modify-assets/sam_checkpoints/sam_vit_h_4b8939.pth",
@@ -183,7 +182,7 @@ def remove_background_to_white_handler(request: Request):
         return False
 
     # 4. Elegir máscara usando clip
-    mask = choose_mask_clip('A single clothing item, such as a ' + garment,image,masks) # array booleana HxW
+    mask = choose_mask_clip('A single clothing item, such as a [shirt/pants/dress/jacket/etc.].',image,masks) # array booleana HxW
 
     # 5. Aplicar máscara sobre imagen
     masked = image.copy()

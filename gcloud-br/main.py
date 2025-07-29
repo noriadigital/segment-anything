@@ -1,15 +1,19 @@
 import cv2
+import base64
 import numpy as np
 import torch
 import clip
 import sys
 import os
+import functions_framework
+from flask import Request, jsonify
+from segment_anything import sam_model_registry, SamAutomaticMaskGenerator, SamPredictor
+from PIL import Image
 
 # Agregamos el directorio padre al path (donde está `segment_anything`)
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from segment_anything import sam_model_registry, SamAutomaticMaskGenerator, SamPredictor
-from PIL import Image
+
 
 def choose_mask_clip(text_prompt, input_image, input_masks, output_path='', return_image=False):
     # Load CLIP model
@@ -84,16 +88,21 @@ def choose_mask_clip(text_prompt, input_image, input_masks, output_path='', retu
         return "Image saved in folder"
     return result_bgra
 
+@functions_framework.http
+def remove_background_to_white_handler(request: Request):
+    data = request.get_json()
+    image_b64 = data.get("image_base64")
+    garment = data.get("garment")
+    sam_checkpoint = data.get("sam_checkpoint", "sam_vit_h_4b8939.pth")
+    model_type = data.get("model_type", "vit_h")
+    points_per_side = int(data.get("points_per_side", 16))
+    pred_iou_thresh = float(data.get("pred_iou_thresh", 0.88))
+    stability_score_thresh = float(data.get("stability_score_thresh", 0.90))
+    min_mask_region_area = int(data.get("min_mask_region_area", 1000))
 
-def remove_background_to_white(image_path, output_path, garment,
-                               sam_checkpoint="../sam_vit_h_4b8939.pth",
-                               model_type="vit_h",
-                               points_per_side=16,
-                               pred_iou_thresh=0.88,
-                               stability_score_thresh=0.90,
-                               min_mask_region_area=1000):
     # 1. Leer imagen
-    image = cv2.imread(image_path)
+    img_bytes = base64.b64decode(image_b64)
+    image = cv2.imdecode(np.frombuffer(img_bytes, np.uint8), cv2.IMREAD_UNCHANGED)
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
     # 2. Cargar modelo SAM
@@ -122,14 +131,7 @@ def remove_background_to_white(image_path, output_path, garment,
     masked[~mask] = [255, 255, 255]  # fondo blanco
 
     result = cv2.cvtColor(masked, cv2.COLOR_RGB2BGR)
-    cv2.imwrite(output_path, result)
-    print(f"Imagen guardada en: {output_path}")
-    return True
-
-remove_background_to_white('../notebooks/images/selfie2_noBG.png', 'prueb3.jpg', "dress",
-                               sam_checkpoint="../sam_vit_h_4b8939.pth",
-                               model_type="vit_h",
-                               points_per_side=16,
-                               pred_iou_thresh=0.88,
-                               stability_score_thresh=0.90,
-                               min_mask_region_area=1000)
+    _, buf = cv2.imencode(".jpg", result)
+    res_b64 = base64.b64encode(buf).decode("utf-8")
+    print("Imagen Procesada!")
+    return jsonify({"image_processed_base64": res_b64})

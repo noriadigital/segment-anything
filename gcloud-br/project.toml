@@ -1,0 +1,4 @@
+# project.toml
+[[build.env]]
+name = "GOOGLE_FUNCTION_TARGET"
+value = "remove_background_to_white_handler"

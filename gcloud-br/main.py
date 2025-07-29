@@ -70,18 +70,18 @@ def upload_blob(bucket_name, source_file_name, destination_blob_name):
     )
 
 
-def choose_mask_clip(text_prompt, input_image, input_masks, output_path='', return_image=False):
+def choose_mask_clip(input_image, input_masks, output_path='', return_image=False):
     # Load CLIP model
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model, preprocess = clip.load("ViT-B/32", device=device)
     
     # Multiple clothing-specific prompts
     clothing_prompts = [
-        "a clothing item on plain background" + text_prompt,
-        "a single piece of clothing" + text_prompt,
-        "clothing product photography" + text_prompt,
-        "retail clothing item" + text_prompt,
-        "fashion item photography" + text_prompt
+        "a clothing item on plain background",
+        "a single piece of clothing",
+        "clothing product photography",
+        "retail clothing item",
+        "fashion item photography"
     ]
     text_tokens = clip.tokenize(clothing_prompts).to(device)
 
@@ -182,7 +182,7 @@ def remove_background_to_white_handler(request: Request):
         return False
 
     # 4. Elegir máscara usando clip
-    mask = choose_mask_clip('A single clothing item, such as a [shirt/pants/dress/jacket/etc.].',image,masks) # array booleana HxW
+    mask = choose_mask_clip(image,masks) # array booleana HxW
 
     # 5. Aplicar máscara sobre imagen
     masked = image.copy()

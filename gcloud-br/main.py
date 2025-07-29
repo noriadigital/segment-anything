@@ -146,16 +146,20 @@ def choose_mask_clip(input_image, input_masks, output_path='', return_image=Fals
 @functions_framework.http
 def remove_background_to_white_handler(request: Request):
     data = request.get_json()
-    image_b64 = data.get("image_base64", download_blob(
+    #Download image
+    download_blob(
         bucket_name="modify-assets",
         source_blob_name="modify-assets/input_garments",
-        destination_file_name="prueba_sweater.jpg"
-    ))
-    sam_checkpoint = download_blob(
-        bucket_name="modify-assets",
-        source_blob_name="modify-assets/sam_checkpoints/sam_vit_h_4b8939.pth",
-        destination_file_name="sam_checkpoint.pth"
+        destination_file_name="/tmp/prueba_sweater.jpg"
     )
+    image_b64 = data.get("image_base64", "/tmp/prueba_sweater.jpg")
+    #Download sam checkpoint
+    download_blob(
+        bucket_name="modify-assets",
+        source_blob_name="modify-assets/sam_checkpoints",
+        destination_file_name="/tmp/sam_checkpoint.pth"
+    )
+    sam_checkpoint = "/tmp/sam_checkpoint.pth"
     model_type = data.get("model_type", "vit_h")
     points_per_side = int(data.get("points_per_side", 16))
     pred_iou_thresh = float(data.get("pred_iou_thresh", 0.88))

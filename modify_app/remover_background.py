@@ -1,31 +1,16 @@
 import cv2
 import numpy as np
 import torch
-import  clip
+import clip
+import sys
+import os
+
+# Agregamos el directorio padre al path (donde está `segment_anything`)
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 from segment_anything import sam_model_registry, SamAutomaticMaskGenerator, SamPredictor
 from PIL import Image
-import os
-sam_checkpoint = "../sam_vit_h_4b8939.pth"
-model_type = "vit_h"
-device = "cuda"
-sam = sam_model_registry[model_type](checkpoint=sam_checkpoint)
-sam.to(device=device)
-mask_generator = SamAutomaticMaskGenerator(sam)
 
-image = cv2.imread('prueba_sweater.jpg')
-image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-
-masks = mask_generator.generate(image)
-'''
-mask_generator = SamAutomaticMaskGenerator(
-    model=sam,
-    points_per_side=16,
-    pred_iou_thresh=0.88,
-    stability_score_thresh=0.92,
-    crop_n_layers=0,
-    min_mask_region_area=1000,  # Requires open-cv to run post-processing
-)
-'''
 def choose_mask_clip(text_prompt, input_image, input_masks, output_path='', return_image=False):
     # Load CLIP model
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -33,11 +18,11 @@ def choose_mask_clip(text_prompt, input_image, input_masks, output_path='', retu
     
     # Multiple clothing-specific prompts
     clothing_prompts = [
-        "a clothing item on plain background",
-        "a single piece of clothing",
-        "clothing product photography",
-        "retail clothing item",
-        "fashion item photography"
+        "a clothing item on plain background" + text_prompt,
+        "a single piece of clothing" + text_prompt,
+        "clothing product photography" + text_prompt,
+        "retail clothing item" + text_prompt,
+        "fashion item photography" + text_prompt
     ]
     text_tokens = clip.tokenize(clothing_prompts).to(device)
 
@@ -98,7 +83,9 @@ def choose_mask_clip(text_prompt, input_image, input_masks, output_path='', retu
         cv2.imwrite(os.path.join(output_path, f"mask_{i+1:03}.png"), result_bgra)
         return "Image saved in folder"
     return result_bgra
-def remove_background_to_white(image_path, output_path,
+
+
+def remove_background_to_white(image_path, output_path, garment,
                                sam_checkpoint="../sam_vit_h_4b8939.pth",
                                model_type="vit_h",
                                points_per_side=16,
@@ -128,7 +115,7 @@ def remove_background_to_white(image_path, output_path,
         return False
 
     # 4. Elegir máscara usando clip
-    mask = choose_mask_clip('A photo of a single clothing item, such as a [shirt/pants/dress/jacket/etc.].',image,masks) # array booleana HxW
+    mask = choose_mask_clip('A single clothing item, such as a ' + garment,image,masks) # array booleana HxW
 
     # 5. Aplicar máscara sobre imagen
     masked = image.copy()
@@ -139,7 +126,7 @@ def remove_background_to_white(image_path, output_path,
     print(f"Imagen guardada en: {output_path}")
     return True
 
-remove_background_to_white('prueba_sweater.jpg', 'prueb2.jpg',
+remove_background_to_white('../notebooks/images/selfie2_noBG.png', 'prueb3.jpg', "dress",
                                sam_checkpoint="../sam_vit_h_4b8939.pth",
                                model_type="vit_h",
                                points_per_side=16,

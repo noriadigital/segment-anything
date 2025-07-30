@@ -42,12 +42,15 @@ def download_blob(bucket_name, source_blob_name, destination_file_name):
 from google.cloud import storage
 
 
-def upload_blob(bucket_name, source_file_name, destination_blob_name):
+def upload_blob(bucket_name, contents, destination_blob_name):
     """Uploads a file to the bucket."""
+
     # The ID of your GCS bucket
     # bucket_name = "your-bucket-name"
-    # The path to your file to upload
-    # source_file_name = "local/path/to/file"
+
+    # The contents to upload to the file
+    # contents = "these are my contents"
+
     # The ID of your GCS object
     # destination_blob_name = "storage-object-name"
 
@@ -55,18 +58,10 @@ def upload_blob(bucket_name, source_file_name, destination_blob_name):
     bucket = storage_client.bucket(bucket_name)
     blob = bucket.blob(destination_blob_name)
 
-    # Optional: set a generation-match precondition to avoid potential race conditions
-    # and data corruptions. The request to upload is aborted if the object's
-    # generation number does not match your precondition. For a destination
-    # object that does not yet exist, set the if_generation_match precondition to 0.
-    # If the destination object already exists in your bucket, set instead a
-    # generation-match precondition using its generation number.
-    generation_match_precondition = 0
-
-    blob.upload_from_filename(source_file_name, if_generation_match=generation_match_precondition)
+    blob.upload_from_string(contents)
 
     print(
-        f"File {source_file_name} uploaded to {destination_blob_name}."
+        f"{destination_blob_name} with contents {contents} uploaded to {bucket_name}."
     )
 
 
@@ -203,13 +198,12 @@ def remove_background_to_white_handler(request: Request):
 
     # 6. Subir imagen procesada a GCS
     output_bucket_name = "modify-assets"
-    output_path = "modify-assets/output_garments"
-    output_file_name = "output_prueba.jpg"
+    output_path = "modify-assets/output_garments/output_prueba.jpg"
 
     upload_blob(
         bucket_name=output_bucket_name,
-        source_file_name=output_path,
-        destination_blob_name = output_file_name
+        contents=res_b64,
+        destination_blob_name = output_path
     )
 
     return jsonify({"image_processed_base64": res_b64})

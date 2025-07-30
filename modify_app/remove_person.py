@@ -11,19 +11,30 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from segment_anything import sam_model_registry, SamAutomaticMaskGenerator, SamPredictor
 from PIL import Image
 
-def choose_mask_clip(input_image, input_masks, output_path='', return_image=False, object= None):
+def choose_mask_clip(input_image, input_masks, output_path='', return_image=False, object= ''):
     # Load CLIP model
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model, preprocess = clip.load("ViT-B/32", device=device)
     
     # Multiple clothing-specific prompts
-    clothing_prompts = [
-        "a clothing item on plain background" + object,
-        "a single piece of clothing" + object,
-        "clothing product photography" + object,
-        "retail clothing item" + object,
-        "fashion item photography" + object
-    ]
+    if not object:
+        clothing_prompts = [
+            "a photo of a person wearing clothes",
+            "a selfie of a single person with clothing garments",
+            "a person standing with clothes",
+            "an individual in a selfie showing off clothes",
+            "a person smiling in a selfie",
+            "a selfie taken with a smartphone, with a person wearing clothes"
+        ]
+    else:
+        clothing_prompts = [
+            object,
+            f"a close-up photo of a {object}",
+            f"a single piece of clothing," + object,
+            "clothing product photography" + object,
+            "retail clothing item" + object,
+            "fashion item photography" + object
+        ]
     text_tokens = clip.tokenize(clothing_prompts).to(device)
 
     with torch.no_grad():
@@ -122,6 +133,7 @@ def remove_background_to_white(image_path, output_path, garment,
     masked[~mask] = [255, 255, 255]  # fondo blanco
 
     result = cv2.cvtColor(masked, cv2.COLOR_RGB2BGR)
+    cv2.imwrite("process.jpg", result)
 
     #6. Volver a segmentar imagen recortada
     masks2 = mask_generator.generate(result)
@@ -129,7 +141,7 @@ def remove_background_to_white(image_path, output_path, garment,
     #7. Elegir máscara usando clip (elegimos la ropa)
 
     ## 7.1 Armamos prompts para ropa
-    prompt = 'A photo of a single clothing item, such as a ' + garment
+    prompt = 'A single clothing item, such as a ' + garment
 
     ## 7.2 Lo pasamos por clip
     mask2 = choose_mask_clip(result, masks2, object = prompt)
@@ -138,13 +150,12 @@ def remove_background_to_white(image_path, output_path, garment,
     masked2 = result.copy()
     masked2[~mask2] = [255, 255, 255]  # fondo blanco
 
-    result2 = cv2.cvtColor(masked2, cv2.COLOR_RGB2BGR)
-    cv2.imwrite(output_path, result2)
+    cv2.imwrite(output_path, masked2)
     print(f"Imagen guardada en: {output_path}")
     return True
 
 
-remove_background_to_white('../notebooks/images/selfie2.png', 'prueb3.jpg', "dress",
+remove_background_to_white('../notebooks/images/selfie2.jpg', 'prueb3.jpg', "dress",
                                sam_checkpoint="../sam_vit_h_4b8939.pth",
                                model_type="vit_h",
                                points_per_side=16,

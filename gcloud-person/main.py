@@ -64,19 +64,30 @@ def upload_blob(bucket_name, contents, destination_blob_name):
 
 
 
-def choose_mask_clip(input_image, input_masks, output_path='', return_image=False, object= None):
+def choose_mask_clip(input_image, input_masks, output_path='', return_image=False, object= ''):
     # Load CLIP model
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model, preprocess = clip.load("ViT-B/32", device=device)
     
     # Multiple clothing-specific prompts
-    clothing_prompts = [
-        "a clothing item on plain background" + object,
-        "a single piece of clothing" + object,
-        "clothing product photography" + object,
-        "retail clothing item" + object,
-        "fashion item photography" + object
-    ]
+    if not object:
+        clothing_prompts = [
+            "a photo of a person wearing clothes",
+            "a selfie of a single person with clothing garments",
+            "a person standing with clothes",
+            "an individual in a selfie showing off clothes",
+            "a person smiling in a selfie",
+            "a selfie taken with a smartphone, with a person wearing clothes"
+        ]
+    else:
+        clothing_prompts = [
+            object,
+            f"a close-up photo of a {object}",
+            f"a single piece of clothing," + object,
+            "clothing product photography" + object,
+            "retail clothing item" + object,
+            "fashion item photography" + object
+        ]
     text_tokens = clip.tokenize(clothing_prompts).to(device)
 
     with torch.no_grad():

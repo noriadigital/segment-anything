@@ -25,6 +25,8 @@ def download_blob(bucket_name, source_blob_name, destination_file_name):
     # The path to which the file should be downloaded
     # destination_file_name = "local/path/to/file"
 
+    print("Downloading...")
+
     storage_client = storage.Client()
 
     bucket = storage_client.bucket(bucket_name)
@@ -54,6 +56,8 @@ def upload_blob(bucket_name, contents, destination_blob_name):
 
     # The ID of your GCS object
     # destination_blob_name = "storage-object-name"
+
+    print("Uploading...")
 
     storage_client = storage.Client()
     bucket = storage_client.bucket(bucket_name)
@@ -159,9 +163,9 @@ def remove_background_to_white_handler(request: Request):
     download_blob(
         bucket_name="modify-assets",
         source_blob_name="input_garments/prueba.jpg",
-        destination_file_name="/tmp/prueba.jpg"
+        destination_file_name="../notebooks/images/gs_img.jpg"
     )
-    path = data.get("image_base64", "/tmp/prueba.jpg")
+    path = data.get("image_base64", "../notebooks/images/selfie2.jpg")
     #Download sam checkpoint
     if local ==True:
         sam_checkpoint = "sam_vit_h_4b8939.pth"
@@ -173,7 +177,7 @@ def remove_background_to_white_handler(request: Request):
         )
         sam_checkpoint = "/tmp/sam_checkpoint.pth"
 
-    garment = data.get("garment", "clothing garment")
+    garment_list = data.get("garment", ["shirt", "pants", "dress", "jacket"])
     model_type = data.get("model_type", "vit_h")
     points_per_side = int(data.get("points_per_side", 16))
     pred_iou_thresh = float(data.get("pred_iou_thresh", 0.88))
@@ -181,6 +185,7 @@ def remove_background_to_white_handler(request: Request):
     min_mask_region_area = int(data.get("min_mask_region_area", 1000))
 
     # 1. Leer imagen
+    print("Cargando imagen...")
     image = cv2.imread(path)
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
@@ -188,6 +193,8 @@ def remove_background_to_white_handler(request: Request):
     sam = sam_model_registry[model_type](checkpoint=sam_checkpoint)
     #    sam.to(device="cuda" if torch.cuda.is_available() else "cpu")
     sam.to(device="cpu")
+
+    print("Cargando generador de máscaras...")
 
     mask_generator = SamAutomaticMaskGenerator(
         model=sam,
@@ -206,6 +213,8 @@ def remove_background_to_white_handler(request: Request):
     # 4. Elegir máscara usando clip (elegimos la persona)
     mask = choose_mask_clip(image,masks) # array booleana HxW
 
+    print("Máscara elegida, aplicando...")
+
     # 5. Aplicar máscara sobre imagen
     masked = image.copy()
     masked[~mask] = [255, 255, 255]  # fondo blanco
@@ -215,32 +224,36 @@ def remove_background_to_white_handler(request: Request):
     print("Imagen Procesada!")
 
     #6. Volver a segmentar imagen recortada
-    image2 = buf.tobytes()
+    image2 = cv2.imdecode(np.frombuffer(buf, np.uint8), cv2.IMREAD_COLOR)
+    image2 = cv2.cvtColor(image2, cv2.COLOR_BGR2RGB)
     masks2 = mask_generator.generate(image2)
 
     #7. Elegir máscara usando clip (elegimos la ropa)
+    for garment in garment_list:
 
-    ## 7.1 Armamos prompts para ropa
-    prompt = 'A photo of a single clothing item, such as a ' + garment
+        ## 7.1 Armamos prompts para ropa
+        prompt = 'A photo of a single clothing item, such as a ' + garment
 
-    ## 7.2 Lo pasamos por clip
-    mask2 = choose_mask_clip(image2, masks2, object = prompt)
+        ## 7.2 Lo pasamos por clip
+        mask2 = choose_mask_clip(image2, masks2, object = prompt)
 
-    # 8. Aplicar máscara sobre imagen recortada
-    masked2 = image2.copy()
-    masked2[~mask2] = [255, 255, 255]
+        print("Máscara de ropa elegida, aplicando...")
 
-    result2 = cv2.cvtColor(masked2, cv2.COLOR_RGB2BGR)
-    _, buf2 = cv2.imencode(".jpg", result2)
+        # 8. Aplicar máscara sobre imagen recortada
+        masked2 = image2.copy()
+        masked2[~mask2] = [255, 255, 255]
 
-    # 6. Subir imagen procesada a GCS
-    output_bucket_name = "modify-assets"
-    output_path = "output_garments/output_prueba2.jpg"
+        result2 = cv2.cvtColor(masked2, cv2.COLOR_RGB2BGR)
+        _, buf2 = cv2.imencode(".jpg", result2)
 
-    upload_blob(
-        bucket_name=output_bucket_name,
-        contents=buf2.tobytes(),
-        destination_blob_name = output_path
-    )
+        # 6. Subir imagen procesada a GCS
+        output_bucket_name = "modify-assets"
+        output_path = "output_garments/output_prueba2.jpg"
+
+        upload_blob(
+            bucket_name=output_bucket_name,
+            contents=buf2.tobytes(),
+            destination_blob_name = output_path
+        )
 
     return jsonify({"image_processed_base64"})

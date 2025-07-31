@@ -162,10 +162,10 @@ def remove_background_to_white_handler(request: Request):
     #Download image
     download_blob(
         bucket_name="modify-assets",
-        source_blob_name="input_garments/prueba.jpg",
+        source_blob_name="input_garments/selfie2.jpg",
         destination_file_name="../notebooks/images/gs_img.jpg"
     )
-    path = data.get("image_base64", "../notebooks/images/selfie2.jpg")
+    path = data.get("image_base64", "../notebooks/images/gs_img.jpg")
     #Download sam checkpoint
     if local ==True:
         sam_checkpoint = "sam_vit_h_4b8939.pth"

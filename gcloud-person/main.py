@@ -11,6 +11,9 @@ from flask import Request, jsonify
 from segment_anything import sam_model_registry, SamAutomaticMaskGenerator, SamPredictor
 from PIL import Image
 
+#Para probar en local:
+local = True
+
 def download_blob(bucket_name, source_blob_name, destination_file_name):
     """Downloads a blob from the bucket."""
     # The ID of your GCS bucket
@@ -31,7 +34,7 @@ def download_blob(bucket_name, source_blob_name, destination_file_name):
     # any content from Google Cloud Storage. As we don't need additional data,
     # using `Bucket.blob` is preferred here.
     blob = bucket.blob(source_blob_name)
-    blob.download_to_filename(destination_file_name)
+    blob.download_to_filename(destination_file_name, raw_download=True)
 
     print(
         "Downloaded storage object {} from bucket {} to local file {}.".format(
@@ -66,7 +69,8 @@ def upload_blob(bucket_name, contents, destination_blob_name):
 
 def choose_mask_clip(input_image, input_masks, output_path='', return_image=False, object= ''):
     # Load CLIP model
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    #"cuda" if torch.cuda.is_available() else "cpu"
+    device = "cpu"
     model, preprocess = clip.load("ViT-B/32", device=device)
     
     # Multiple clothing-specific prompts
@@ -154,17 +158,21 @@ def remove_background_to_white_handler(request: Request):
     #Download image
     download_blob(
         bucket_name="modify-assets",
-        source_blob_name="modify-assets/input_garments/prueba.jpg",
+        source_blob_name="input_garments/prueba.jpg",
         destination_file_name="/tmp/prueba.jpg"
     )
-    image_b64 = data.get("image_base64", "/tmp/prueba.jpg")
+    path = data.get("image_base64", "/tmp/prueba.jpg")
     #Download sam checkpoint
-    download_blob(
-        bucket_name="modify-assets",
-        source_blob_name="modify-assets/sam_checkpoints/sam_checkpoint.pth",
-        destination_file_name="/tmp/sam_checkpoint.pth"
-    )
-    sam_checkpoint = "/tmp/sam_checkpoint.pth"
+    if local ==True:
+        sam_checkpoint = "sam_vit_h_4b8939.pth"
+    else:
+        download_blob(
+            bucket_name="modify-assets",
+            source_blob_name="sam_checkpoints/sam_checkpoint.pth",
+            destination_file_name="/tmp/sam_checkpoint.pth"
+        )
+        sam_checkpoint = "/tmp/sam_checkpoint.pth"
+
     garment = data.get("garment", "clothing garment")
     model_type = data.get("model_type", "vit_h")
     points_per_side = int(data.get("points_per_side", 16))
@@ -173,13 +181,13 @@ def remove_background_to_white_handler(request: Request):
     min_mask_region_area = int(data.get("min_mask_region_area", 1000))
 
     # 1. Leer imagen
-    img_bytes = base64.b64decode(image_b64)
-    image = cv2.imdecode(np.frombuffer(img_bytes, np.uint8), cv2.IMREAD_UNCHANGED)
+    image = cv2.imread(path)
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
     # 2. Cargar modelo SAM
     sam = sam_model_registry[model_type](checkpoint=sam_checkpoint)
-    sam.to(device="cuda" if torch.cuda.is_available() else "cpu")
+    #    sam.to(device="cuda" if torch.cuda.is_available() else "cpu")
+    sam.to(device="cpu")
 
     mask_generator = SamAutomaticMaskGenerator(
         model=sam,
@@ -204,11 +212,11 @@ def remove_background_to_white_handler(request: Request):
 
     result = cv2.cvtColor(masked, cv2.COLOR_RGB2BGR)
     _, buf = cv2.imencode(".jpg", result)
-    res_b64 = base64.b64encode(buf).decode("utf-8")
     print("Imagen Procesada!")
 
     #6. Volver a segmentar imagen recortada
-    masks2 = mask_generator.generate(res_b64)
+    image2 = buf.tobytes()
+    masks2 = mask_generator.generate(image2)
 
     #7. Elegir máscara usando clip (elegimos la ropa)
 
@@ -216,24 +224,23 @@ def remove_background_to_white_handler(request: Request):
     prompt = 'A photo of a single clothing item, such as a ' + garment
 
     ## 7.2 Lo pasamos por clip
-    mask2 = choose_mask_clip(res_b64, masks2, object = prompt)
+    mask2 = choose_mask_clip(image2, masks2, object = prompt)
 
     # 8. Aplicar máscara sobre imagen recortada
-    masked2 = res_b64.copy()
+    masked2 = image2.copy()
     masked2[~mask2] = [255, 255, 255]
 
     result2 = cv2.cvtColor(masked2, cv2.COLOR_RGB2BGR)
     _, buf2 = cv2.imencode(".jpg", result2)
-    res_b64_2 = base64.b64encode(buf2).decode("utf-8") 
 
     # 6. Subir imagen procesada a GCS
     output_bucket_name = "modify-assets"
-    output_path = "modify-assets/output_garments/output_prueba.jpg"
+    output_path = "output_garments/output_prueba2.jpg"
 
     upload_blob(
         bucket_name=output_bucket_name,
-        contents=res_b64_2,
+        contents=buf2.tobytes(),
         destination_blob_name = output_path
     )
 
-    return jsonify({"image_processed_base64": res_b64})
+    return jsonify({"image_processed_base64"})
